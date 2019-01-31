@@ -1,0 +1,129 @@
+---
+  - name: Create the VPC
+    ec2_vpc_net:
+      name: "{{ vpc_name }}"
+      region: "{{ aws_region }}"
+      state: present
+      cidr_block: "{{ part_cidr }}.0.0/16"
+    register: my_vpc
+
+
+  - name: Create subnets
+    ec2_vpc_subnet:
+      state: present
+      vpc_id: "{{ my_vpc.vpc.id }}"
+      az: "{{ item.az }}"
+      cidr: "{{ item.subnet_cidr }}"
+      map_public: "{{ item.assign_public_ips | default('no') }}"
+      resource_tags:
+        Name: "{{ env_name }}-{{ item.subnet_name }}"
+    with_items: "{{ vpc_subnets }}"
+    register: all_subnets
+
+
+  - name: subnets_info
+    debug:
+      msg: "{{ all_subnets }}"
+
+
+  - name: set_subnet_facts
+    set_fact:
+      subnet_info: "{{ subnet_info|default({}) | combine( { item.item.subnet_name: item.subnet.id } )  }}"
+    with_items: "{{ all_subnets.results }}"
+
+
+
+  - name: set_subnet_variables
+    set_fact:
+      pub_1a: "{{ subnet_info['pub-1a'] }}"
+      pub_1b: "{{ subnet_info['pub-1b'] }}"
+      pub_1c: "{{ subnet_info['pub-1c'] }}"
+      nat_1a: "{{ subnet_info['nat-1a'] }}"
+      nat_1b: "{{ subnet_info['nat-1b'] }}"
+      nat_1c: "{{ subnet_info['nat-1c'] }}"
+      nat_gw: "{{ subnet_info['nat-gw'] }}"
+      db_subnet_1a: "{{ subnet_info['db-subnet-1a'] }}"
+      db_subnet_1b: "{{ subnet_info['db-subnet-1b'] }}"
+
+
+
+  - name: Create the VPC Internet GW
+    ec2_vpc_igw:
+      region: "{{ aws_region }}"
+      vpc_id: "{{ my_vpc.vpc.id }}"
+      state: present
+      resource_tags:
+        Name: "{{ vpc_name }}"
+    register: my_vpc_igw
+
+
+
+  - name: Create new nat gateway and allocate new EIP if a nat gateway does not yet exist in the subnet.
+    ec2_vpc_nat_gateway:
+      state: present
+      subnet_id: "{{ nat_gw }}"
+      region: "{{ aws_region }}"
+      if_exist_do_not_create: true
+    register: my_nat_gateway
+
+
+  - name: natgw_info
+    debug:
+      msg: "{{ my_nat_gateway }}"
+
+  - name: natgw_info
+    debug:
+      msg: "{{ my_vpc_igw }}"
+
+  - name: Set up public subnet route table
+    ec2_vpc_route_table:
+     vpc_id: "{{ my_vpc.vpc.id }}"
+     region: "{{ aws_region }}"
+     resource_tags:
+       Name: "{{ env_name }}-pub-rt"
+     subnets:
+       - "{{ pub_1a }}"
+       - "{{ pub_1b }}"
+       - "{{ pub_1c }}"
+       - "{{ nat_gw }}"
+     routes:
+       - dest: "0.0.0.0/0"
+         gateway_id: "{{ my_vpc_igw.gateway_id }}"
+     purge_routes: false
+     purge_subnets: false
+
+  - name: Set up nat subnet route table
+    ec2_vpc_route_table:
+     vpc_id: "{{ my_vpc.vpc.id }}"
+     region: "{{ aws_region }}"
+     resource_tags:
+       Name: "{{ env_name }}-nat-rt"
+     subnets:
+       - "{{ nat_1a }}"
+       - "{{ nat_1b }}"
+       - "{{ nat_1c }}"
+       - "{{ db_subnet_1a }}"
+       - "{{ db_subnet_1b }}"
+     routes:
+       - dest: "0.0.0.0/0"
+         gateway_id: "{{ my_nat_gateway.nat_gateway_id }}"
+     purge_routes: false
+     purge_subnets: false         
+
+
+  - name: Create all_from_local Security Group
+    ec2_group:
+      name: "all_from_local"
+      description: "all_from_local"
+      vpc_id: "{{ my_vpc.vpc.id }}"
+      region: "{{ aws_region }}"
+      rules:
+        - proto: all
+          from_port: all
+          to_port: all
+          cidr_ip: "10.0.0.0/8"
+        - proto: all
+          from_port: all
+          to_port: all
+          cidr_ip: "192.168.0.0/16"
+    register: all_from_local_sg

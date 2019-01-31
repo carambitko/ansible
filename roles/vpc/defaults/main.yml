@@ -1,0 +1,12 @@
+---
+vpc_subnets:
+
+  - {subnet_name: pub-1a, az: "{{ aws_region }}a", subnet_cidr: "{{ part_cidr }}.1.0/24"}
+  - {subnet_name: pub-1b, az: "{{ aws_region }}b", subnet_cidr: "{{ part_cidr }}.2.0/24"}
+  - {subnet_name: pub-1c, az: "{{ aws_region }}c", subnet_cidr: "{{ part_cidr }}.3.0/24"}
+  - {subnet_name: nat-1a, az: "{{ aws_region }}a", subnet_cidr: "{{ part_cidr }}.4.0/24"}
+  - {subnet_name: nat-1b, az: "{{ aws_region }}b", subnet_cidr: "{{ part_cidr }}.5.0/24"}
+  - {subnet_name: nat-1c, az: "{{ aws_region }}c", subnet_cidr: "{{ part_cidr }}.6.0/24"}
+  - {subnet_name: db-subnet-1a, az: "{{ aws_region }}a", subnet_cidr: "{{ part_cidr }}.7.0/24"}
+  - {subnet_name: db-subnet-1b, az: "{{ aws_region }}b", subnet_cidr: "{{ part_cidr }}.8.0/24"}
+  - {subnet_name: nat-gw, az: "{{ aws_region }}a", subnet_cidr: "{{ part_cidr }}.100.0/24"}  
